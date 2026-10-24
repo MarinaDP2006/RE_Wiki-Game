@@ -10,24 +10,5 @@
 <section class="proto-hero" style="--img:url('../img/escenarios/re2_vestibulo.webp')"><div><span class="proto-kicker">INICIO · ACCESS GRANTED</span><h1>Centro de archivos</h1>
 <p>Explora los archivos del universo Resident Evil.</p></div></section><main class="proto-shell"><h2 class="proto-title">Explorar las secciones</h2><div class="proto-grid"><article class="proto-card"><div class="proto-img" style="--img:url('../img/escenarios/re2_vestibulo.webp')" role="img" aria-label="Imagen conservada del proyecto"></div><div class="proto-copy"><span class="proto-tag">ARCHIVO 001</span><h3>Juegos</h3><p>Descubre los expedientes y sus conexiones con la saga.</p></div></article><article class="proto-card"><div class="proto-img" style="--img:url('../img/escenarios/re4_plaza.webp')" role="img" aria-label="Imagen conservada del proyecto"></div><div class="proto-copy"><span class="proto-tag">ARCHIVO 002</span><h3>Personajes</h3><p>Descubre los expedientes y sus conexiones con la saga.</p></div></article><article class="proto-card"><div class="proto-img" style="--img:url('../img/escenarios/re8_aldea.webp')" role="img" aria-label="Imagen conservada del proyecto"></div><div class="proto-copy"><span class="proto-tag">ARCHIVO 003</span><h3>Bestiario</h3><p>Descubre los expedientes y sus conexiones con la saga.</p></div></article><article class="proto-card"><div class="proto-img" style="--img:url('../img/escenarios/re2_vestibulo.webp')" role="img" aria-label="Imagen conservada del proyecto"></div><div class="proto-copy"><span class="proto-tag">ARCHIVO 004</span><h3>Cronología</h3><p>Descubre los expedientes y sus conexiones con la saga.</p></div></article><article class="proto-card"><div class="proto-img" style="--img:url('../img/escenarios/re4_plaza.webp')" role="img" aria-label="Imagen conservada del proyecto"></div><div class="proto-copy"><span class="proto-tag">ARCHIVO 005</span><h3>Mapa</h3><p>Descubre los expedientes y sus conexiones con la saga.</p></div></article><article class="proto-card"><div class="proto-img" style="--img:url('../img/escenarios/re8_aldea.webp')" role="img" aria-label="Imagen conservada del proyecto"></div><div class="proto-copy"><span class="proto-tag">ARCHIVO 006</span><h3>Expedientes</h3><p>Descubre los expedientes y sus conexiones con la saga.</p></div></article></div><section id="cuestionario-saga" aria-labelledby="titulo-cuestionario"><h2 class="proto-title" id="titulo-cuestionario">Cuestionario de Resident Evil</h2><div class="proto-paper"><span class="proto-tag">PRUEBA DE CONOCIMIENTOS</span><p>¿Cuánto sabes de la saga? Abre el formulario publicado y envía tus respuestas.</p><p><a class="btn btn-rojo" href="https://forms.gle/uJMFdMTQGWCvDZzJ8" target="_blank" rel="noopener noreferrer">Abrir cuestionario de Resident Evil ↗</a></p></div></section>
 
-<p>Todos los elementos son representaciones visuales. Esta versión no recoge datos personales.</p></main><footer class="proto-foot">UMBRELLA ARCHIVES · 2026 · SITIO NO OFICIAL</footer>
-<script type="module">
-  // Carga inicial de la base de datos: abre wiki/index.html?sembrar=1 con una
-  // cuenta cuyo documento usuarios/{uid} tenga rol "admin" (se pone a mano en la consola).
-  if (new URLSearchParams(location.search).has("sembrar")) {
-    const { configurado, usuarioActual, esAdmin, sembrarDatos, crear } = await import("../comun/firebase.js");
-    const aviso = crear("p", "proto-paper");
-    document.querySelector(".proto-shell").prepend(aviso);
-    const usuario = await usuarioActual();
-    if (!configurado) aviso.textContent = "Rellena firebaseConfig en web/comun/firebase.js antes de sembrar.";
-    else if (!usuario) aviso.textContent = "Inicia sesión con una cuenta de administración para cargar los datos.";
-    else if (!(await esAdmin(usuario))) aviso.textContent = "Tu cuenta no tiene rol \"admin\" en la colección usuarios.";
-    else {
-      aviso.textContent = "Cargando los datos de la wiki en Firestore…";
-      sembrarDatos()
-        .then(total => (aviso.textContent = `Listo: ${total} documentos guardados en Firestore.`))
-        .catch(error => (aviso.textContent = `Error al sembrar: ${error.message}`));
-    }
-  }
-</script>
+<p>Sitio no oficial creado como TFG. Las contraseñas de las cuentas se guardan cifradas (bcrypt).</p></main><footer class="proto-foot">UMBRELLA ARCHIVES · 2026 · SITIO NO OFICIAL</footer>
 </body></html>

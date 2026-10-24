@@ -1,17 +1,27 @@
+# Blueprint de Render: un Web Service de Node que publica la web (web/)
+# y la API de la wiki (/api) conectada a MySQL.
+# Las variables marcadas con "sync: false" se rellenan en el panel de Render
+# (Environment) y nunca se suben a GitHub.
 services:
   - type: web
     name: umbrella-archives
-    runtime: static
-    staticPublishPath: web
-    buildCommand: echo "Publishing existing static Umbrella Archives website"
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: cd servidor && npm ci
+    startCommand: cd servidor && npm start
+    healthCheckPath: /api/estado
     autoDeployTrigger: commit
-    headers:
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /*
-        name: Referrer-Policy
-        value: strict-origin-when-cross-origin
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: MYSQL_CA
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false

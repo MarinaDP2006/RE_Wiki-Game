@@ -1,0 +1,25 @@
+{
+  "name": "umbrella-archives-servidor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servidor de Umbrella Archives: publica la web y la API de la wiki sobre MySQL",
+  "type": "module",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --env-file=.env --watch index.js",
+    "bd:crear": "node --env-file=.env bd/crear.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.1.0",
+    "express-mysql-session": "^3.0.3",
+    "express-rate-limit": "^8.1.0",
+    "express-session": "^1.18.2",
+    "google-auth-library": "^10.4.0",
+    "mysql2": "^3.15.0"
+  }
+}

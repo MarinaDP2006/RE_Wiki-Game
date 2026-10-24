@@ -1,5 +1,7 @@
 # Mi tutorial para crear UMBRELLA ARCHIVES
 
+> **Nota (24-10-2026):** este tutorial es el plan inicial. El proyecto ya no usa Firebase: la web y la API se publican en Render con Node.js y los datos están en MySQL. Consulta el README y la GUIA-DESDE-CERO.
+
 **Proyecto Final · octubre de 2026 a mayo de 2027**
 
 Esta es mi guía de trabajo, escrita para poder seguirla sin dar nada por sabido. La idea es construir **Umbrella Archives**, una web dedicada al universo de *Resident Evil*, con sus juegos, personajes, criaturas, virus, organizaciones, lugares, películas, cronología y mapa. También quiero que los visitantes puedan buscar información, que exista una zona para usuarios registrados y que se pueda abrir la web desde una pequeña aplicación de escritorio hecha con JavaFX.

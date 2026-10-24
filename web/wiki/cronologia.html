@@ -10,7 +10,7 @@
 <section class="proto-hero" style="--img:url('../img/escenarios/re3_calles.webp')"><div><span class="proto-kicker">LÍNEA TEMPORAL</span><h1>Cronología</h1>
 <p>Explora los archivos del universo Resident Evil.</p></div></section><main class="proto-shell"><div class="proto-columns"><section class="proto-paper" id="linea-temporal"><h2>Historia de los brotes</h2><div class="proto-line"><time>1960-1980</time><p>Orígenes de las investigaciones clandestinas.</p></div><div class="proto-line"><time>1998</time><p>Incidente de Raccoon City.</p></div><div class="proto-line"><time>2004</time><p>Acontecimientos en España.</p></div><div class="proto-line"><time>2017</time><p>Incidente de Luisiana.</p></div><div class="proto-line"><time>2021</time><p>La aldea europea.</p></div></section><aside class="proto-paper"><h2>Filtros previstos</h2><p>Por fecha, juego y organización. En la aplicación final serán controles interactivos.</p></aside></div></main><footer class="proto-foot">UMBRELLA ARCHIVES · 2026 · SITIO NO OFICIAL</footer>
 <script type="module">
-  import { leerColeccion, crear } from "../comun/firebase.js";
+  import { leerColeccion, crear } from "../comun/api.js";
   // Sustituye los hitos de muestra por los de la colección "cronologia".
   const seccion = document.getElementById("linea-temporal");
   const hitos = await leerColeccion("cronologia");

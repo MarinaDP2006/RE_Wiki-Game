@@ -1,6 +1,6 @@
 # GUÍA DESDE CERO · UMBRELLA ARCHIVES
 
-**Actualizada el 23 de octubre de 2026.** La configuración Render está preparada en una PR hasta que se fusione con `main`.
+**Actualizada el 24 de octubre de 2026.** La web y la API se publican en Render como un Web Service de Node.js y los datos están en MySQL. Firebase ya no se usa.
 
 Esta guía explica cómo retomar, desarrollar y entregar **Umbrella Archives**, una wiki no oficial del universo Resident Evil, desde un ordenador Windows con PowerShell y Visual Studio Code. Distingue lo que **ya existe**, lo que **es solo diseño** y lo que **todavía falta implementar**. No se debe confundir una página dibujada con una función operativa.
 
@@ -9,28 +9,21 @@ Esta guía explica cómo retomar, desarrollar y entregar **Umbrella Archives**, 
 Repositorio correcto: https://github.com/MarinaDP2006/archivos-umbrella
 
 **Lo que existe en main:**
-- Una portada estática en 'web/index.html' con tres accesos: wiki, cronología y mapa.
-- Las páginas HTML de la wiki en 'web/wiki/': inicio, juegos, personajes, criaturas, virus, organizaciones, lugares, películas, cronología, mapa, búsqueda, acceso y ficha.
-- Estilos en 'web/comun/estilos.css', 'web/wiki/wiki.css' y 'web/wiki/estilos-archivos.css'.
-- Numerosos recursos gráficos en 'web/img/' y 'src/img/' (retratos, escenarios, ilustraciones, etc.).
-- 'render.yaml' configurado para publicar directamente la carpeta 'web/' sin paso de compilación.
-- 'README.md', 'tutorial.md' y esta guía.
-- La PR #1, que retiró la implementación anterior del juego y dejó la wiki como objetivo principal, ya está fusionada.
+- La web en 'web/': portada, páginas de la wiki ('web/wiki/'), estilos e imágenes ('web/img/').
+- El servidor en 'servidor/': Node.js + Express. Publica 'web/' y una API en '/api' que lee y escribe en MySQL.
+- La base de datos MySQL: 'servidor/bd/esquema.sql' (tablas) y 'servidor/bd/datos.sql' (239 fichas y los expedientes clasificados).
+- Listados, fichas por ID ('ficha.html?c=personajes&id=leon'), buscador (consulta SQL) y cronología que leen de la base de datos.
+- Registro e inicio de sesión reales en 'web/wiki/acceso.html': email y contraseña (guardada como hash bcrypt) y Google opcional. Los usuarios y las sesiones se guardan en MySQL.
+- 'render.yaml' preparado para un Web Service de Node en Render.
+- El cuestionario de Google Forms enlazado desde la portada y desde el centro de archivos.
 
-**Lo que no existe actualmente en main:**
-- 'angular-app/', 'api-node/', 'scripts/' y 'escritorio-javafx/'. Aunque se describan en documentos antiguos, NO están presentes: no ejecutes comandos dentro de esas carpetas.
-- 'package.json' en la raíz: la web actual no necesita 'npm install' ni 'npm start' para funcionar.
-- Una base de datos, API propia, fichas alimentadas por registros reales, registro de usuarios operativo o aplicación JavaFX.
+**Lo que no existe:**
+- 'angular-app/' y 'escritorio-javafx/' solo tienen un '.gitkeep': son fases futuras.
+- Un panel de administración para editar fichas desde la web (de momento se editan con SQL).
 
-**Maquetas o funciones todavía incompletas:**
-- 'web/wiki/buscar.html' anuncia un buscador futuro y muestra resultados de ejemplo. No es un buscador operativo.
-- 'web/wiki/acceso.html' tiene inicio de sesión y registro reales con Firebase Authentication (Google y correo/contraseña). Funciona en cuanto se rellenan las claves de 'firebaseConfig' en 'web/comun/firebase.js'.
-- 'web/wiki/ficha.html' es una ficha de muestra, no una ficha dinámica por ID.
-- 'web/wiki/mapa.html' tiene etiquetas de lugares en un mapa visual; no hay filtros ni navegación interactiva completa.
-- 'web/wiki/cronologia.html' tiene acontecimientos de ejemplo y filtros previstos, sin filtrado implementado.
-- La navegación de categorías está maquetada; sus fichas, enlaces y contenidos tienen que comprobarse uno a uno.
-
-**Importante:** la web estática actual se sirve desde `web/` en https://umbrella-archives-static.onrender.com/. El Angular y la API descritos en documentos antiguos son planes de futuro, no requisitos para desplegar la web.
+**Maquetas todavía incompletas:**
+- 'web/wiki/mapa.html' tiene etiquetas de lugares en un mapa visual, sin navegación interactiva.
+- 'web/wiki/cronologia.html' tiene los hitos, pero no los filtros previstos.
 
 ## 1. Qué se pretende entregar
 
@@ -43,8 +36,8 @@ Una wiki de Resident Evil con diseño de archivo secreto, visualmente coherente,
 1. Instala Git: https://git-scm.com/downloads
 2. Instala Visual Studio Code: https://code.visualstudio.com/
 3. Usa Chrome, Edge o Firefox para las pruebas.
-4. Opcional: extensión Live Server en VS Code para previsualizar HTML estático.
-5. Node.js LTS solo será necesario cuando se creen herramientas de desarrollo, Angular o un servidor Node. No hace falta para ver la web actual.
+4. Node.js 22 LTS: https://nodejs.org/ (ejecuta el servidor).
+5. MySQL 8: MySQL Community Server con MySQL Workbench, o XAMPP. También vale un MySQL en la nube (Aiven).
 6. JDK 21, Maven y JavaFX solo cuando comience la fase de escritorio.
 
 En VS Code, abre Terminal > Nuevo terminal y comprueba:
@@ -54,14 +47,14 @@ git --version
 code --version
 ~~~~
 
-Si más adelante instalas Node:
+Comprueba también Node:
 
 ~~~~powershell
 node --version
 npm --version
 ~~~~
 
-No instales Angular, Express, Firebase, MySQL o JavaFX por adelantado si aún no los necesitas.
+No instales Angular ni JavaFX por adelantado: el servidor instala Express y el resto con 'npm install'.
 
 ## 3. Descargar la versión correcta (primera vez)
 
@@ -76,7 +69,7 @@ cd archivos-umbrella
 code .
 ~~~~
 
-La raíz debe contener 'web/', 'src/img/', 'README.md', 'render.yaml' y 'GUIA-DESDE-CERO.md'. Verifica:
+La raíz debe contener 'web/', 'servidor/', 'README.md', 'render.yaml' y 'GUIA-DESDE-CERO.md'. Verifica:
 
 ~~~~powershell
 pwd
@@ -94,20 +87,30 @@ git pull --ff-only origin main
 
 Si tienes cambios locales, guárdalos o haz commit primero. No uses 'git reset --hard' para solucionar un conflicto sin copia de seguridad.
 
-## 4. Abrir la web actual sin compilar
+## 4. Arrancar la web en tu ordenador
 
-Desde VS Code, instala Live Server si quieres y abre 'web/index.html' con **Open with Live Server**. Alternativa con Python, si está instalado:
+La web necesita el servidor para tener datos y sesión. En PowerShell, desde la raíz del proyecto:
 
 ~~~~powershell
-cd web
-python -m http.server 5500
+cd servidor
+npm install
+copy .env.example .env
 ~~~~
 
-Visita http://localhost:5500/. Si usas Live Server, abre la dirección que te muestre. Desde la portada entra a 'wiki/index.html', 'wiki/cronologia.html' y 'wiki/mapa.html'.
+Abre 'servidor/.env' y pon los datos de tu MySQL. Con XAMPP son: MYSQL_HOST=localhost, MYSQL_USER=root, MYSQL_PASSWORD vacía y MYSQL_DATABASE=umbrella.
 
-No abras 'localhost:4200' ni 'localhost:3000' esperando encontrar Angular o una API: hoy no existen esos servidores en este repositorio.
+Para crear la base de datos (utf8mb4 con cotejamiento utf8mb4_general_ci) tienes dos opciones:
 
-**Comprobación:** la portada carga, las imágenes aparecen, los enlaces internos van a sus páginas y no hay errores de recursos en las herramientas de desarrollo del navegador (F12 > Console/Network).
+- **phpMyAdmin**: arranca Apache y MySQL en XAMPP, abre http://localhost/phpmyadmin, ve a *Importar* y sube primero 'servidor/bd/esquema.sql' y después 'servidor/bd/datos.sql'. El primero crea la base 'umbrella' y sus tablas; el segundo mete las fichas.
+- **Terminal**: 'npm run bd:crear' hace lo mismo en la base de datos que pongas en el .env.
+
+Después arranca la web:
+
+~~~~powershell
+npm run dev
+~~~~
+
+Visita http://localhost:3000/. 'npm run bd:crear' borra y vuelve a crear todas las tablas: úsalo solo para instalar o reiniciar la base de datos.
 
 ## 5. Conocer las carpetas antes de editar
 
@@ -117,25 +120,33 @@ archivos-umbrella/
 │   ├── index.html                Portada real
 │   ├── 404.html
 │   ├── comun/estilos.css         Estilos globales
+│   ├── comun/api.js              Llamadas a la API (datos, búsqueda, sesión)
 │   ├── img/                      Imágenes servidas en la web
 │   └── wiki/
-│       ├── index.html            Inicio de la wiki
-│       ├── juegos.html, personajes.html, criaturas.html...
-│       ├── ficha.html            Ficha de demostración
-│       ├── buscar.html           Buscador de demostración
-│       ├── acceso.html           Acceso de demostración
-│       ├── cronologia.html       Cronología de ejemplo
+│       ├── index.html            Inicio de la wiki y cuestionario
+│       ├── juegos.html, personajes.html, criaturas.html...  Listados desde MySQL
+│       ├── ficha.html            Ficha por ID (?c=sección&id=ficha)
+│       ├── buscar.html           Buscador (consulta SQL)
+│       ├── acceso.html           Registro, inicio de sesión y expedientes
+│       ├── cronologia.html       Cronología desde MySQL
 │       ├── mapa.html             Mapa de ejemplo
 │       ├── wiki.css
 │       └── estilos-archivos.css
+├── servidor/
+│   ├── index.js                  Express: publica web/ y la API /api
+│   ├── bd.js                     Conexión con MySQL
+│   ├── bd/esquema.sql            Tablas
+│   ├── bd/datos.sql              Datos de la wiki
+│   ├── bd/crear.js               npm run bd:crear
+│   └── .env.example              Variables de entorno de ejemplo
 ├── src/img/                     Colección adicional de arte
-├── render.yaml                  Publica web/
+├── render.yaml                  Web Service de Node en Render
 ├── README.md
 ├── tutorial.md                   Documento histórico: verificar rutas
 └── GUIA-DESDE-CERO.md            Esta guía
 ~~~~
 
-Para que una imagen cargue en Render tiene que estar dentro de 'web/' (o copiarse allí mediante un proceso explícito). Los archivos de 'src/img/' NO se publican automáticamente con 'publish = "web"'. No borres ni muevas las imágenes originales hasta verificar todas sus referencias.
+Para que una imagen cargue en Render tiene que estar dentro de 'web/' (o copiarse allí mediante un proceso explícito). Los archivos de 'src/img/' NO se publican: el servidor solo sirve la carpeta 'web/'. No borres ni muevas las imágenes originales hasta verificar todas sus referencias.
 
 ## 6. Primera fase: estabilizar la maqueta
 
@@ -182,43 +193,30 @@ Empieza por unas pocas fichas reales para validar el formato; después amplía e
 
 **Mapa:** convertir los puntos decorativos en enlaces o controles accesibles asociados a fichas de ubicaciones; después implementar filtros, zoom y controles táctiles si el tiempo lo permite.
 
-**Acceso:** ya usa Firebase Authentication: las contraseñas las guarda Google, nunca nuestra web ni localStorage. Para activarlo: en la consola de Firebase, Authentication → Método de acceso → activar «Correo electrónico/contraseña» y «Google»; en Configuración → Dominios autorizados, añadir el dominio de Render (y 'localhost'/'127.0.0.1' para pruebas); copiar la configuración de la app web en 'firebaseConfig' de 'web/comun/firebase.js'. Probar siempre con Live Server, no abriendo el archivo con doble clic (Google no funciona con 'file://').
+**Acceso:** ya funciona contra la API: 'POST /api/auth/registro', '/api/auth/login' y '/api/auth/google'. Las contraseñas se guardan como hash bcrypt en la tabla 'usuarios', nunca en texto plano ni en localStorage. Para Google hace falta un Client ID de Google Cloud en la variable 'GOOGLE_CLIENT_ID' (ver README). Prueba siempre con 'npm run dev' y http://localhost:3000, no abriendo el HTML con doble clic: sin el servidor no hay datos ni sesión.
 
 **Comprobación:** cada ficha se encuentra desde el buscador, se abre desde su categoría, y enlaza a otras fichas sin errores.
 
-## 9. Elegir arquitectura sin tirar el trabajo existente
+## 9. Arquitectura elegida
 
-**Ruta recomendada para terminar antes:** ampliar la web estática con JavaScript modular y JSON. Es suficiente para una wiki pública con búsqueda y fichas, sin servidor.
+**Web + API en Node.js + MySQL.** La wiki necesita cuentas de usuario y contenido privado (los expedientes clasificados), así que hace falta un servidor que compruebe la sesión antes de devolver esos datos. Express publica la web y la API en el mismo dominio, y MySQL guarda la wiki, los usuarios y las sesiones.
 
-**Ruta alternativa si el proyecto requiere Angular:** crear 'angular-app/' desde cero solo tras decidir la migración; pasar estilos y pantallas gradualmente, dejando 'web/' intacta hasta verificar paridad. Escribir el proyecto en Angular NO está hecho a fecha de esta guía.
+En la memoria, justifica: por qué una tabla por sección, por qué las listas van en tablas hijas con claves ajenas, por qué bcrypt para las contraseñas y por qué las consultas usan parámetros '?' (inyección SQL). El README lo resume.
 
-**Backend Node / base de datos:** añadirlos únicamente cuando sean imprescindibles para cuentas, edición de contenidos o información privada. Una wiki pública de solo lectura puede funcionar sin API propia.
+## 10. Autenticación y zona restringida
 
-La tecnología final debe justificarse en la memoria: qué problema resuelve y cómo se prueba.
-
-## 10. Autenticación y zona restringida (fase opcional posterior)
-
-Si hacen falta usuarios, primero define exactamente qué podrán hacer. Firebase Authentication u otro proveedor gestionado puede encargarse del inicio de sesión; los datos protegidos requieren reglas de autorización en el servidor o en la base de datos. Ocultar botones en el navegador **no protege** datos. No publiques secretos, claves administrativas ni perfiles privados en GitHub. Si no hay una necesidad real de cuentas, entrega una wiki pública funcional y explica que el acceso es ampliación futura.
+Ocultar botones en el navegador **no protege** datos: lo que protege los expedientes es que el servidor responde 401 a 'GET /api/expedientes' si no hay sesión. La sesión es una cookie 'httpOnly' que crea el servidor y que se guarda en la tabla 'sesiones'. No publiques el archivo '.env', contraseñas de MySQL ni 'SESSION_SECRET' en GitHub.
 
 ## 11. Publicar en Render
 
-La configuración versionada actual es:
+Render ejecuta el servidor de Node ('render.yaml'): instala las dependencias con 'cd servidor && npm ci' y arranca con 'npm start'. Render no tiene MySQL propio, así que la base de datos va en un proveedor de MySQL (recomendado: el plan gratuito de Aiven). Los pasos detallados están en el README, apartado «Publicar en Render con MySQL». En resumen:
 
-~~~~toml
-[build]
-  publish = "web"
-~~~~
-
-No hay 'build command', ni despliegue Angular, ni redirección SPA global. Los archivos HTML se publican como rutas reales.
-
-1. En https://app.Render.com/ abre el **sitio ya conectado al repositorio**; verifica el nombre y dominio en el panel antes de actuar. No crees otro sitio por error.
-2. Confirma repositorio 'MarinaDP2006/archivos-umbrella', rama 'main' y directorio de publicación 'web'.
-3. Guarda los cambios mediante Git y súbelos a 'main' tras revisarlos. Render debería desplegar con la integración Git, si está configurada.
-4. Revisa el registro de despliegue. Si falla, busca el primer error.
-5. Prueba la portada, '/wiki/index.html', '/wiki/buscar.html', '/wiki/cronologia.html', '/wiki/mapa.html' y '/img/logo.svg' en el **dominio real**.
-6. Comprueba enlaces, imágenes, versión móvil y ausencia de errores en consola.
-
-No presupongas que un dominio mencionado en README o en un tutorial antiguo es el dominio definitivo. Tampoco añadas un proxy o Render sin una API que desplegar.
+1. Crea el MySQL gratuito en Aiven y copia la **Service URI** y el **certificado CA**.
+2. Desde tu ordenador, con esos datos en 'servidor/.env', ejecuta 'npm run bd:crear'.
+3. En Render: *New → Blueprint* con este repositorio. Rellena 'DATABASE_URL', 'MYSQL_CA' y, si quieres Google, 'GOOGLE_CLIENT_ID'.
+4. Despliega y abre '/api/estado': debe responder '{"ok":true,"bd":true}'.
+5. Prueba la portada, un listado, una ficha, el buscador, el registro y los expedientes en el **dominio real**.
+6. Cuando el nuevo servicio funcione, borra el antiguo *Static Site*: un sitio estático no puede ejecutar Node.
 
 ## 12. Guardar cambios sin perder nada
 
@@ -261,29 +259,28 @@ Un lanzador JavaFX no reemplaza la web; es un complemento. No lo uses para ocult
 
 | Fase | Situación actual | Qué hay que terminar |
 | --- | --- | --- |
-| Recuperación del proyecto | Repositorio y web estática presentes | Clonar, abrir y validar rutas |
+| Recuperación del proyecto | Web, servidor y base de datos presentes | Clonar, 'npm install', 'npm run bd:crear' y validar rutas |
 | Diseño / navegación | Portada y páginas HTML presentes | Corregir enlaces, móvil y accesibilidad |
-| Catálogo de la wiki | Imágenes y vistas de ejemplo | Datos estructurados, fichas reales y enlaces |
-| Buscador | Solo maqueta | Búsqueda real y filtros |
+| Catálogo de la wiki | 239 fichas en MySQL y fichas por ID | Revisar datos y enlazar fichas entre sí |
+| Buscador | Búsqueda SQL en todas las secciones | Filtros por sección |
 | Cronología | Acontecimientos de ejemplo | Datos contrastados, navegación y filtros |
 | Mapa | Puntos visuales | Controles interactivos y fichas asociadas |
-| Usuarios | Acceso de demostración | Autenticación segura solo si es necesaria |
-| Publicación | Configuración Render presente | Verificar despliegue y dominio real |
+| Usuarios | Registro, login (email y Google) y expedientes privados | Panel de administración |
+| Publicación | 'render.yaml' de Web Service | Crear MySQL en Aiven, desplegar y verificar el dominio real |
 | Pruebas / memoria | Documentación inicial | Capturas, pruebas, incidencias y conclusiones |
 | JavaFX | No iniciado | Crear al final y empaquetar |
 
 ## 16. Problemas frecuentes
 
-- **'cd angular-app' o 'cd api-node' falla:** esas carpetas no existen en main. Sigue esta guía, no los comandos históricos.
-- **'npm start' falla:** el proyecto actual es HTML/CSS estático y no tiene 'package.json' de arranque.
-- **La portada funciona pero una imagen falla:** comprueba mayúsculas y minúsculas, ruta relativa y que la imagen esté publicada en 'web/img/'.
-- **Una tarjeta no hace nada:** puede ser un elemento visual sin enlace; hay que implementarlo.
-- **El buscador no funciona:** es una maqueta, no un fallo del navegador.
-- **El inicio de sesión dice «Falta configurar Firebase» o «dominio no autorizado»:** faltan las claves en 'firebaseConfig' de 'web/comun/firebase.js' o el dominio en Authentication → Configuración → Dominios autorizados.
-- **Render muestra una web antigua:** verifica sitio, rama, commit y directorio 'web' en el registro de despliegue.
+- **'npm run dev' dice que no encuentra '.env':** copia 'servidor/.env.example' como 'servidor/.env' y rellénalo.
+- **'/api/estado' responde '"bd":false' o las páginas salen con las tarjetas de ejemplo:** el servidor no conecta con MySQL. Revisa 'DATABASE_URL' o 'MYSQL_HOST/USER/PASSWORD/DATABASE', y que la base de datos exista y tenga las tablas ('npm run bd:crear').
+- **Error de SSL o certificado con Aiven:** falta 'MYSQL_CA' (en Render) o 'MYSQL_CA_FILE' (en local).
+- **No aparece el botón de Google:** falta 'GOOGLE_CLIENT_ID'. Si aparece pero da error, añade el dominio en *Orígenes de JavaScript autorizados* de Google Cloud.
+- **La web tarda en cargar la primera vez en Render:** el plan gratuito se duerme tras 15 minutos sin visitas.
+- **La página abierta con doble clic no tiene datos:** hay que entrar por el servidor (http://localhost:3000).
+- **Render muestra una web antigua:** verifica servicio, rama, commit y el registro de despliegue.
 - **Git rechaza 'push':** actualiza tu rama, revisa el conflicto y evita sobrescribir el trabajo de otra persona.
-- **Los cambios no se ven:** usa recarga forzada, comprueba el despliegue y descarta caché.
 
 ## 17. Regla para continuar
 
-Antes de empezar cada tarea: **verificar lo que existe → definir comportamiento → implementar → probar localmente → revisar en GitHub → desplegar → registrar resultado**. Mantén los diseños originales hasta que su sustituto esté probado. No presentes Angular, API, usuarios ni JavaFX como terminados: actualmente son objetivos futuros.
+Antes de empezar cada tarea: **verificar lo que existe → definir comportamiento → implementar → probar localmente → revisar en GitHub → desplegar → registrar resultado**. Mantén los diseños originales hasta que su sustituto esté probado. No presentes Angular ni JavaFX como terminados: actualmente son objetivos futuros.

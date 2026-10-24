@@ -1,170 +1,153 @@
 # UMBRELLA ARCHIVES · Resident Evil
-## Estado
-- **Angular**: base inicial creada, con portada, categorías, búsqueda local y fichas de ejemplo. No es todavía una migración completa de la wiki.
-- **API Node.js / Express**: prototipo independiente con endpoints de estado y expedientes de ejemplo. Sin autenticación, base de datos ni panel administrativo.
-- **Render**: publica directamente `web/` (HTML, CSS, imágenes y wiki) en la raíz del dominio. Angular se conserva para desarrollo futuro.
-- **JavaFX**: pendiente para la fase final.
-- **Web original**: `web/` es la web pública actual; sus rutas se publican sin prefijo `/legado/`.
+
+Wiki no oficial de la saga Resident Evil (TFG de 2º de DAM). Tiene juegos, películas, personajes, bestiario, virus, organizaciones, lugares, cronología, buscador y una zona de miembros con archivos clasificados.
+
+## Arquitectura
+
+```text
+Navegador ──► Render (Web Service, Node.js + Express) ──► MySQL
+               ├── /            web/ (HTML, CSS, imágenes)
+               └── /api/...     API REST de la wiki y de los usuarios
+```
+
+- **Frontend**: HTML, CSS y JavaScript sin frameworks (`web/`). Las páginas piden los datos a la API con `fetch` desde `web/comun/api.js`.
+- **Backend**: Node.js 22 + Express 5 (`servidor/`). Publica la web y la API en el mismo dominio, así que la cookie de sesión funciona sin configurar CORS.
+- **Base de datos**: MySQL 8 (`servidor/bd/esquema.sql` y `servidor/bd/datos.sql`).
+- **Usuarios**: registro e inicio de sesión con email y contraseña (hash bcrypt) o con Google (Google Identity Services). Las sesiones se guardan en MySQL.
+- **Publicación**: Render (`render.yaml`).
 
 ## Estructura
 ```text
 archivos-umbrella/
-├── angular-app/         # Frontend Angular
-│   ├── src/             # Componentes, rutas y estilos
-│   └── public/          # Recursos públicos y redirecciones
-├── api-node/            # API Express independiente
-├── scripts/             # Copia de imágenes y maqueta al compilar
-├── web/                 # Maqueta original, sin modificar
-├── src/img/             # Recursos originales adicionales
-├── render.yaml          # Publicación estática en Render
-├── GUIA-DESDE-CERO.md   # Tutorial completo
+├── web/                     # La web que ve el usuario
+│   ├── index.html           # Portada
+│   ├── comun/api.js         # Llamadas a la API y pintado de tarjetas
+│   ├── comun/estilos.css
+│   ├── wiki/                # Páginas de la wiki, ficha, buscador y acceso
+│   └── img/                 # Retratos, escenarios e ilustraciones
+├── servidor/                # Backend Node.js
+│   ├── index.js             # Express: web estática + API
+│   ├── bd.js                # Conexión con MySQL
+│   ├── bd/esquema.sql       # Tablas
+│   ├── bd/datos.sql         # Datos de la wiki (239 fichas + expedientes)
+│   ├── bd/crear.js          # Ejecuta esquema.sql y datos.sql
+│   └── .env.example         # Variables de entorno de ejemplo
+├── render.yaml              # Blueprint de Render
+├── GUIA-DESDE-CERO.md       # Tutorial completo
 └── README.md
 ```
 
-## Desarrollo rápido
-Requisitos: Git, Node.js compatible con Angular 19 (recomendado Node 22 LTS) y npm.
+## Probarlo en tu ordenador
+Requisitos: Git, Node.js 22 LTS y un MySQL 8 (MySQL Community Server, XAMPP/MariaDB o uno en la nube).
 
 ```powershell
 git clone https://github.com/MarinaDP2006/archivos-umbrella.git
-cd archivos-umbrella
-cd angular-app
+cd archivos-umbrella\servidor
 npm install
-npm start
+copy .env.example .env      # y rellena los datos de tu MySQL
 ```
 
-Abre http://localhost:4200. Para compilar:
+La base de datos se llama `umbrella` y usa **utf8mb4** con cotejamiento **utf8mb4_general_ci**. `esquema.sql` ya la crea así (`CREATE DATABASE IF NOT EXISTS umbrella ...`), así que no hace falta crearla a mano. Hay dos formas de cargarla:
+
+**Con XAMPP y phpMyAdmin**
+1. Abre el panel de XAMPP y pulsa *Start* en **Apache** y **MySQL**.
+2. Entra en http://localhost/phpmyadmin → pestaña **Importar** → elige `servidor/bd/esquema.sql` → **Importar**.
+3. Repite con `servidor/bd/datos.sql`.
+4. En `servidor/.env` deja `MYSQL_HOST=localhost`, `MYSQL_USER=root`, `MYSQL_PASSWORD=` (vacía en XAMPP) y `MYSQL_DATABASE=umbrella`.
+
+**Con la terminal** (hace lo mismo que los pasos 2 y 3, con la base de datos del `.env`):
 ```powershell
-npm run build
-node ../scripts/copiar-legado.mjs
+npm run bd:crear   # crea las tablas y carga los datos (¡borra lo que hubiera!)
 ```
 
-En otra terminal:
+Después arranca la web:
 ```powershell
-cd archivos-umbrella/api-node
-npm install
-npm run dev
+npm run dev        # arranca el servidor y se reinicia al guardar cambios
 ```
 
-API local: http://localhost:3000/api/estado y http://localhost:3000/api/archivos.
+Abre http://localhost:3000. Si ves `{"ok":true,"bd":true}` en http://localhost:3000/api/estado, el servidor está conectado a MySQL.
 
-## Publicación
-La web pública se genera directamente desde `web/`, sin compilar Angular. En Render, crea un **Static Site** conectado a `main` o usa `render.yaml` como Blueprint; directorio de publicación: `web`. La cuenta de Render debe seleccionar el workspace correcto. El servicio gratuito tiene límites de ancho de banda y minutos de build.
+## Publicar en Render con MySQL
+Render no ofrece MySQL gestionado (solo PostgreSQL), así que la base de datos va en un proveedor de MySQL y el servidor en Render.
 
-**Sitio estático en Render:** https://umbrella-archives-static.onrender.com/ (servicio creado; comprobar estado de despliegue en Render). El antiguo servicio Docker `umbrella-archives.onrender.com` es independiente.
+1. **MySQL gratis en Aiven**: crea una cuenta en https://aiven.io, crea un servicio *MySQL* con el plan **Free** y espera a que esté *Running*. En *Overview* copia la **Service URI** (`mysql://avnadmin:...@...:PUERTO/defaultdb?ssl-mode=REQUIRED`) y descarga el **CA certificate**.
+2. **Cargar los datos**: en tu `servidor/.env` pon `DATABASE_URL=` con esa URI y `MYSQL_CA_FILE=` con la ruta del certificado. Después ejecuta `npm run bd:crear` desde tu ordenador.
+3. **Render**: *New → Blueprint*, elige este repositorio y Render leerá `render.yaml`. Crea un **Web Service** llamado `umbrella-archives`. El antiguo *Static Site* no puede ejecutar Node, así que bórralo cuando el nuevo funcione.
+4. En el servicio, *Environment*:
+   - `DATABASE_URL`: la Service URI de Aiven.
+   - `MYSQL_CA`: el contenido completo del certificado CA (desde `-----BEGIN CERTIFICATE-----` hasta `END`).
+   - `GOOGLE_CLIENT_ID`: opcional, mira el apartado de Google.
+   - `SESSION_SECRET` lo genera Render solo.
+5. *Manual Deploy → Deploy latest commit*. Comprueba `https://TU-SERVICIO.onrender.com/api/estado`.
 
-## Base de datos (Firebase Firestore)
-La wiki lee sus datos de **Cloud Firestore**. Todo el acceso está en `web/comun/firebase.js` (configuración, lectura, usuarios y datos iniciales); cada página solo importa lo que necesita. Mientras la configuración tenga los marcadores `TU_...`, la web funciona igual con los datos locales de `SEMILLA`, así que nunca se queda vacía.
+El plan gratuito de Render se duerme tras 15 minutos sin visitas: la primera carga después tarda unos 30-60 segundos.
 
-### Puesta en marcha
-1. En https://console.firebase.google.com crea un proyecto, añade una **app web** y copia su `firebaseConfig` en `web/comun/firebase.js`.
-2. **Firestore Database → Crear base de datos** (modo producción, ubicación `eur3`).
-3. **Firestore → Reglas**: pega las reglas de abajo y publica.
-4. **Authentication**: activa *Google* y *Correo electrónico/contraseña*, y añade el dominio de Render en *Dominios autorizados*.
-5. Entra en la web con tu cuenta. En **Firestore → usuarios → (tu uid)** cambia `rol` de `miembro` a `admin` a mano (las reglas impiden hacerlo desde la web).
-6. Abre `wiki/index.html?sembrar=1`: copia los 239 documentos de `SEMILLA` a Firestore.
-7. Crea a mano en la consola los documentos de `expedientes` (no van en el código porque es contenido privado).
+### Acceso con Google (opcional)
+1. https://console.cloud.google.com → crea un proyecto → *APIs y servicios → Pantalla de consentimiento de OAuth* (tipo Externo).
+2. *Credenciales → Crear credenciales → ID de cliente de OAuth → Aplicación web*.
+3. En **Orígenes de JavaScript autorizados** añade `http://localhost:3000` y `https://TU-SERVICIO.onrender.com`.
+4. Copia el **Client ID** en `GOOGLE_CLIENT_ID` (en `.env` y en Render). Sin él, el botón de Google no aparece y funciona solo el email.
 
-### Modelo de datos
-| Colección | Documento (id) | Campos | Quién lee | Quién escribe |
-|---|---|---|---|---|
-| `juegos` | `re2` | comunes + `anio` (número), `plataforma`, `protagonistas` (array), `ambientacion` | todos | admin |
-| `personajes` | `leon` | comunes + `primeraAparicion`, `afiliacion`, `estado`, `nacimiento` | todos | admin |
-| `criaturas` | `licker` | comunes + `origen`, `primeraAparicion`, `peligrosidad` (1-5) | todos | admin |
-| `virus` | `virus-t` | comunes + `tipo`, `creador`, `primeraAparicion` | todos | admin |
-| `organizaciones` | `umbrella` | comunes + `tipo`, `fundacion`, `lider`, `estado` | todos | admin |
-| `lugares` | `raccoon-city` | comunes + `region`, `primeraAparicion`, `anio` | todos | admin |
-| `peliculas` | `vendetta` | comunes + `anio`, `formato`, `protagonistas` (array) | todos | admin |
-| `cronologia` | `raccoon-1998` | comunes + `periodo`, `anio`, `juego` | todos | admin |
-| `expedientes` | `informe-arklay` | `titulo`, `nivel`, `resumen`, `texto`, `imagen`, `orden` | con sesión | admin |
-| `usuarios` | uid de Firebase Auth | `uid`, `nombre`, `email`, `foto`, `proveedor`, `rol`, `creado`, `ultimoAcceso` | su dueño y admin | su dueño (sin tocar `rol`) |
+## Base de datos
 
-**Campos comunes** de la wiki: `nombre`, `resumen` (frase para la tarjeta), `descripcion` (texto de la ficha), `imagen` (ruta desde `web/`, p. ej. `img/retratos/leon.webp`) y `orden` (número para ordenar con `orderBy`).
+### Modelo
+| Tabla | Clave | Columnas propias | Relación |
+|---|---|---|---|
+| `juegos` | `id` (p. ej. `re2-remake`) | `categoria` (ENUM), `anio`, `plataforma`, `ambientacion` | 1:N con `juego_protagonistas` |
+| `personajes` | `id` (`leon`) | `primera_aparicion`, `afiliacion`, `estado`, `nacimiento` | 1:N con `personaje_imagenes` |
+| `criaturas` | `id` (`licker`) | `origen`, `primera_aparicion`, `peligrosidad` (1-5, CHECK) | 1:N con `criatura_imagenes` |
+| `virus` | `id` (`virus-t`) | `tipo` (ENUM), `creador`, `primera_aparicion` | |
+| `organizaciones` | `id` (`umbrella`) | `tipo`, `fundacion`, `lider`, `estado` | |
+| `lugares` | `id` (`raccoon-city`) | `region`, `primera_aparicion`, `anio` | |
+| `peliculas` | `id` (`vendetta`) | `anio`, `formato` | 1:N con `pelicula_protagonistas` |
+| `cronologia` | `id` (`raccoon-1998`) | `periodo`, `anio`, `juego` | |
+| `expedientes` | `id` | `titulo`, `nivel`, `resumen`, `texto`, `imagen`, `orden` | solo con sesión |
+| `usuarios` | `id` AUTO_INCREMENT | `email` UNIQUE, `nombre`, `foto`, `proveedor` (ENUM), `password_hash`, `google_id` UNIQUE, `rol` (ENUM), `creado`, `ultimo_acceso` | |
+| `sesiones` | `session_id` | `expires`, `data` | la gestiona express-mysql-session |
+
+Todas las tablas son InnoDB con `utf8mb4` y `utf8mb4_general_ci`, igual que la base de datos. Funciona en MySQL 8 y en el MariaDB de XAMPP.
+
+Todas las tablas de la wiki comparten `nombre`, `resumen`, `descripcion`, `imagen` (ruta desde `web/`) y `orden`.
 
 Decisiones:
-- **Una colección por sección** en lugar de una única tabla: cada página lee solo lo suyo y cada tipo tiene sus propios campos (Firestore no exige un esquema fijo).
-- **Ids legibles** (`leon`, `virus-t`) para que la URL de la ficha sea clara: `ficha.html?c=personajes&id=leon`.
-- **Búsqueda en el navegador**: Firestore no busca texto dentro de los campos, así que `buscar.html` lee las colecciones públicas (son pequeñas) y filtra en el cliente.
-- **Usuarios con el uid como id**: así las reglas comparan `request.auth.uid == uid` sin consultas extra.
+- **Una tabla por sección**, porque cada tipo de ficha tiene columnas distintas.
+- **Las listas van en tablas hijas** (protagonistas, galería de imágenes) con `FOREIGN KEY ... ON DELETE CASCADE`, y no como texto separado por comas. Así se respeta la primera forma normal.
+- **Ids legibles** (`leon`, `virus-t`) para que las URL sean claras: `ficha.html?c=personajes&id=leon`.
+- **Búsqueda con `LIKE`**: el cotejamiento `utf8mb4_general_ci` no distingue mayúsculas ni tildes, así que `nemesis` encuentra «Némesis».
 
-Ejemplo de documento `expedientes/informe-arklay`:
-```json
-{ "titulo": "Informe del laboratorio de Arklay", "nivel": "ALTO SECRETO", "orden": 1,
-  "resumen": "Registro interno sobre la fuga del Virus-T en la mansión.",
-  "texto": "Texto completo del expediente…", "imagen": "img/escenarios/re2_nest.webp" }
+### API
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /api/wiki/:seccion` | Fichas de una sección ordenadas |
+| `GET /api/wiki/:seccion/:id` | Una ficha (404 si no existe) |
+| `GET /api/buscar?q=texto` | Busca en todas las secciones |
+| `POST /api/auth/registro` | Crea una cuenta con email y contraseña |
+| `POST /api/auth/login` | Inicia sesión con email y contraseña |
+| `POST /api/auth/google` | Inicia sesión con el token de Google |
+| `GET /api/auth/yo` | Usuario de la sesión actual o `null` |
+| `POST /api/auth/salir` | Cierra la sesión |
+| `GET /api/expedientes` | Archivos clasificados (401 sin sesión) |
+| `GET /api/estado` | Comprobación de salud para Render |
+
+### Seguridad
+- **Contraseñas**: solo se guarda su hash bcrypt (coste 10); nunca la contraseña.
+- **Inyección SQL**: todas las consultas usan parámetros `?` de mysql2. Los nombres de tabla salen de una lista cerrada del servidor, nunca de la petición.
+- **Sesión**: cookie `httpOnly` (el JavaScript no puede leerla), `sameSite=lax` y `secure` en producción. Se regenera al iniciar sesión para evitar la fijación de sesión.
+- **Fuerza bruta**: las rutas de acceso admiten como mucho 30 intentos cada 15 minutos por IP (express-rate-limit).
+- **Google**: el servidor verifica la firma del token y que sea para nuestro Client ID antes de crear la sesión.
+- **Mensajes neutros**: el login responde igual si el correo no existe o si la contraseña es incorrecta.
+- **XSS**: los textos de la base de datos se pintan con `textContent`, nunca con `innerHTML`.
+- **Secretos fuera de GitHub**: `.env` está en `.gitignore`; en Render van en *Environment*.
+
+Para dar rol de administración a una cuenta (reservado para futuras funciones):
+```sql
+UPDATE usuarios SET rol = 'admin' WHERE email = 'tu@correo.com';
 ```
 
-### Reglas de seguridad
-Ocultar un botón no protege nada: lo que decide quién lee o escribe son estas reglas, que se ejecutan en los servidores de Google.
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    function conSesion() {
-      return request.auth != null;
-    }
-
-    function esDueno(uid) {
-      return conSesion() && request.auth.uid == uid;
-    }
-
-    function esAdmin() {
-      return conSesion()
-        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol == 'admin';
-    }
-
-    // 1) Wiki pública: cualquiera lee; solo administración escribe.
-    match /{coleccion}/{id} {
-      allow read: if coleccion in ['juegos', 'personajes', 'criaturas', 'virus',
-                                   'organizaciones', 'lugares', 'peliculas', 'cronologia'];
-      allow write: if coleccion in ['juegos', 'personajes', 'criaturas', 'virus',
-                                    'organizaciones', 'lugares', 'peliculas', 'cronologia']
-                   && esAdmin();
-    }
-
-    // 2) Expedientes clasificados: solo con sesión iniciada.
-    match /expedientes/{id} {
-      allow read: if conSesion();
-      allow write: if esAdmin();
-    }
-
-    // 3) Usuarios: cada persona solo ve y edita su propio documento.
-    match /usuarios/{uid} {
-      allow read: if esDueno(uid) || esAdmin();
-
-      // Al registrarse: el documento es suyo y siempre empieza como "miembro".
-      allow create: if esDueno(uid)
-                    && request.resource.data.uid == uid
-                    && request.resource.data.rol == 'miembro'
-                    && request.resource.data.keys().hasOnly(
-                         ['uid', 'nombre', 'email', 'foto', 'proveedor', 'rol', 'creado', 'ultimoAcceso']);
-
-      // Al volver a entrar: puede cambiar sus datos, pero nunca uid, rol ni creado.
-      allow update: if esDueno(uid)
-                    && !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['uid', 'rol', 'creado'])
-                    && request.resource.data.keys().hasOnly(
-                         ['uid', 'nombre', 'email', 'foto', 'proveedor', 'rol', 'creado', 'ultimoAcceso']);
-
-      allow delete: if esAdmin();
-    }
-  }
-}
-```
-- Wiki: lectura pública; escritura solo con `rol == 'admin'` (se comprueba leyendo el documento del usuario con `get()`).
-- Expedientes: hace falta sesión iniciada; sin ella Firestore responde *permission-denied*.
-- Usuarios: cada uno solo ve el suyo, se crea siempre como `miembro` y no puede cambiar `uid`, `rol` ni `creado`, ni añadir campos inventados.
-
-Estas reglas se han probado con el emulador de Firestore (`@firebase/rules-unit-testing`): 22 casos permitidos/denegados y la carga inicial de los 239 documentos como admin.
+## Cuestionario de Resident Evil
+El cuestionario de Google Forms está enlazado desde la portada y desde el centro de archivos (`web/wiki/index.html#cuestionario-saga`): https://forms.gle/uJMFdMTQGWCvDZzJ8
 
 ## Siguientes etapas
-Completar la migración de cada pantalla, ampliar datos, añadir pruebas y accesibilidad, conectar Angular a la API mediante una URL de entorno, incorporar autenticación y almacenamiento con reglas seguras, deploy y validar Render.
+Panel de administración para editar fichas desde la web, pruebas automáticas de la API y revisión de accesibilidad.
 
 **Tutorial detallado:** [GUIA-DESDE-CERO.md](GUIA-DESDE-CERO.md)
-
-## Cuestionario público de Resident Evil
-El cuestionario de Google Forms está enlazado desde la portada y se muestra integrado en el centro de archivos de la web:
-
-- Formulario: https://forms.gle/uJMFdMTQGWCvDZzJ8
-- Web: https://umbrella-archives-static.onrender.com/wiki/index.html#cuestionario-saga
-- Código del formulario e integración: `web/comun/firebase.js`, `web/index.html` y `web/wiki/index.html`.

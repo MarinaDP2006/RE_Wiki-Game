@@ -10,7 +10,7 @@
 <section class="proto-hero" style="--img:url('../img/escenarios/re2_vestibulo.webp')"><div><span class="proto-kicker" id="ficha-seccion">ARCHIVO · VISTA DETALLE</span><h1 id="ficha-nombre">Ficha de expediente</h1>
 <p id="ficha-resumen">Explora los archivos del universo Resident Evil.</p></div></section><main class="proto-shell"><div class="proto-columns"><article class="proto-paper" id="ficha-texto"><h2>Expediente de muestra</h2><p>Esta vista representa cómo quedarán las fichas de personajes, juegos y criaturas en la aplicación final.</p><h2>Historial</h2><p>Biografía, relaciones, cronología, apariciones y galería de los expedientes.</p></article><aside class="proto-paper" id="ficha-tecnica"><h2>Ficha técnica</h2><p>Nombre, primer juego, afiliación, estado, fuente y fotografía.</p><img src="../img/escenarios/re2_vestibulo.webp" alt="Recurso gráfico existente" style="width:100%;height:auto"></aside></div></main><footer class="proto-foot">UMBRELLA ARCHIVES · 2026 · SITIO NO OFICIAL</footer>
 <script type="module">
-  import { leerDocumento, COLECCIONES, CAMPOS, rutaImagen, crear } from "../comun/firebase.js";
+  import { leerDocumento, COLECCIONES, CAMPOS, rutaImagen, crear } from "../comun/api.js";
   // La ficha se elige por la URL: ficha.html?c=personajes&id=leon
   const parametros = new URLSearchParams(location.search);
   const coleccion = parametros.get("c");

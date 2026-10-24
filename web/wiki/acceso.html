@@ -20,11 +20,12 @@
     <h2>Iniciar sesión</h2>
     <p>Entra con tu cuenta de Google o con tu correo electrónico. Si aún no tienes cuenta, escribe tu correo y una contraseña y pulsa «Registrarse con email».</p>
 
-    <button type="button" class="btn acceso-google" id="btn-google">
-      <span aria-hidden="true">G</span> Continuar con Google
-    </button>
-
-    <p class="acceso-separador"><span>o con tu correo</span></p>
+    <!-- Google dibuja aquí su propio botón «Continuar con Google» (Google Identity Services).
+         Si el servidor no tiene GOOGLE_CLIENT_ID, el bloque se queda oculto. -->
+    <div id="bloque-google" hidden>
+      <div id="btn-google" class="acceso-google"></div>
+      <p class="acceso-separador"><span>o con tu correo</span></p>
+    </div>
 
     <form id="form-email" class="acceso-form" novalidate>
       <label for="email">Correo electrónico</label>
@@ -59,8 +60,8 @@
     </div>
 
     <h2 class="proto-title">Archivos clasificados</h2>
-    <!-- Estas tarjetas son de ejemplo. Si la colección "expedientes" de Firestore tiene datos,
-         el JavaScript las sustituye por los expedientes reales (que solo se leen con sesión iniciada). -->
+    <!-- Estas tarjetas son de ejemplo. Al iniciar sesión, el JavaScript las sustituye por los
+         expedientes de la tabla "expedientes" de MySQL (la API solo los da con sesión iniciada). -->
     <div class="proto-grid" id="lista-expedientes">
       <article class="proto-card"><div class="proto-img" style="--img:url('../img/retratos/wesker.webp')" role="img" aria-label="Albert Wesker"></div><div class="proto-copy"><span class="proto-tag">CLASIFICADO 001</span><h3>Proyecto Wesker</h3><p>Programa secreto de Umbrella para crear sujetos superiores. Albert Wesker fue uno de sus pocos supervivientes.</p></div></article>
       <article class="proto-card"><div class="proto-img" style="--img:url('../img/retratos/birkin.webp')" role="img" aria-label="William Birkin"></div><div class="proto-copy"><span class="proto-tag">CLASIFICADO 002</span><h3>Virus G</h3><p>Investigación de William Birkin bajo Raccoon City. Su robo provocó la mutación del propio Birkin.</p></div></article>
@@ -72,97 +73,103 @@
 <footer class="proto-foot">UMBRELLA ARCHIVES · 2026 · SITIO NO OFICIAL</footer>
 
 <!-- ============================================================
-     FIREBASE AUTHENTICATION
-     type="module" permite usar "import" en el navegador sin instalar nada.
-     La configuración (firebaseConfig) y la conexión están en ../comun/firebase.js,
-     el mismo módulo que usa el resto de la wiki: las claves se ponen solo allí.
+     INICIO DE SESIÓN
+     Habla con la API del servidor (../comun/api.js), que guarda los usuarios en MySQL:
+       - Email y contraseña: POST /api/auth/registro y /api/auth/login
+       - Google: Google Identity Services entrega un token que el servidor verifica
+     La sesión es una cookie que crea el servidor; la página solo pregunta quién es el usuario.
      ============================================================ -->
+<script src="https://accounts.google.com/gsi/client" async></script>
 <script type="module">
-  import { configurado, conectar, guardarUsuario, leerExpedientes, rutaImagen } from "../comun/firebase.js";
+  import {
+    usuarioActual, registrarConEmail, entrarConEmail, entrarConGoogle, salir,
+    leerConfiguracion, leerExpedientes, rutaImagen
+  } from "../comun/api.js";
 
   // ---------- 1. ELEMENTOS DE LA PÁGINA ----------
   const zonaAcceso = document.getElementById("zona-acceso");
   const zonaRestringida = document.getElementById("zona-restringida");
   const formEmail = document.getElementById("form-email");
   const mensaje = document.getElementById("mensaje");
-  const botones = zonaAcceso.querySelectorAll("button");
 
   function mostrarMensaje(texto) { mensaje.textContent = texto; }
 
-  // Si todavía no se han puesto las claves, avisamos y no intentamos conectar.
-  if (!configurado) {
-    mostrarMensaje("Falta configurar Firebase: pon tus claves en firebaseConfig (web/comun/firebase.js).");
-    botones.forEach(b => b.disabled = true);
-  } else {
-    iniciarAcceso();
+  // ---------- 2. MOSTRAR UNA ZONA U OTRA ----------
+  // "usuario" es null si no hay sesión.
+  function pintarSesion(usuario) {
+    const conectado = usuario !== null;
+    zonaAcceso.hidden = conectado;
+    zonaRestringida.hidden = !conectado;
+    if (conectado) {
+      document.getElementById("nombre-usuario").textContent = usuario.nombre || usuario.email.split("@")[0];
+      document.getElementById("correo-usuario").textContent = usuario.email;
+      formEmail.reset();
+      mostrarMensaje("");
+      cargarExpedientes();
+    }
   }
 
-  async function iniciarAcceso() {
-    // ---------- 2. CONECTAR CON FIREBASE ----------
-    // conectar() devuelve "auth" (la sesión) y "authSdk" (las funciones de Authentication).
-    const { auth, authSdk } = await conectar();
-    const {
-      onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup,
-      signInWithEmailAndPassword, createUserWithEmailAndPassword
-    } = authSdk;
-    auth.languageCode = "es"; // la ventana de Google sale en español
+  // Al abrir la página: ¿ya había una sesión iniciada (cookie)?
+  pintarSesion(await usuarioActual());
 
-    // ---------- 3. ESCUCHAR LA SESIÓN ----------
-    // Firebase llama a esta función al cargar la página y cada vez que alguien entra o sale.
-    // "usuario" es null si no hay sesión. Firebase recuerda la sesión aunque cierres el navegador.
-    onAuthStateChanged(auth, usuario => {
-      const conectado = usuario !== null;
-      zonaAcceso.hidden = conectado;
-      zonaRestringida.hidden = !conectado;
-      if (conectado) {
-        document.getElementById("nombre-usuario").textContent = usuario.displayName || usuario.email.split("@")[0];
-        document.getElementById("correo-usuario").textContent = usuario.email;
-        formEmail.reset();
-        mostrarMensaje("");
-        // Guarda la ficha en usuarios/{uid}. Si falla (reglas, red...), el login sigue funcionando.
-        guardarUsuario(usuario).catch(error => console.warn("No se pudo guardar el usuario en Firestore:", error.code));
-        cargarExpedientes();
-      }
-    });
+  // ---------- 3. ENTRAR CON GOOGLE ----------
+  // Solo si el servidor tiene configurado GOOGLE_CLIENT_ID.
+  const { googleClientId } = await leerConfiguracion();
+  if (googleClientId) prepararGoogle(googleClientId);
 
-    // ---------- 4. ENTRAR CON GOOGLE ----------
-    document.getElementById("btn-google").addEventListener("click", async () => {
-      try {
-        await signInWithPopup(auth, new GoogleAuthProvider());
-      } catch (error) {
-        mostrarMensaje(traducirError(error));
-      }
-    });
-
-    // ---------- 5. ENTRAR O REGISTRARSE CON EMAIL ----------
-    formEmail.addEventListener("submit", async evento => {
-      evento.preventDefault(); // evita que el formulario recargue la página
-      const email = formEmail.email.value.trim();
-      const password = formEmail.password.value;
-      // evento.submitter es el botón que se pulsó: "entrar" o "registro"
-      const accion = evento.submitter ? evento.submitter.value : "entrar";
-
-      if (!email || password.length < 6) {
-        mostrarMensaje("Escribe un correo válido y una contraseña de al menos 6 caracteres.");
-        return;
-      }
-      try {
-        if (accion === "registro") {
-          await createUserWithEmailAndPassword(auth, email, password); // crea la cuenta y deja la sesión iniciada
-        } else {
-          await signInWithEmailAndPassword(auth, email, password);
+  function prepararGoogle(clientId) {
+    // La librería de Google se carga con "async": esperamos a que exista.
+    if (!window.google?.accounts?.id) return setTimeout(() => prepararGoogle(clientId), 200);
+    google.accounts.id.initialize({
+      client_id: clientId,
+      // Google llama a esta función con un token firmado; el servidor lo comprueba.
+      callback: async ({ credential }) => {
+        try {
+          pintarSesion(await entrarConGoogle(credential));
+        } catch (error) {
+          mostrarMensaje(error.message);
         }
-      } catch (error) {
-        mostrarMensaje(traducirError(error));
       }
     });
-
-    // ---------- 6. CERRAR SESIÓN ----------
-    document.getElementById("btn-salir").addEventListener("click", () => signOut(auth));
+    google.accounts.id.renderButton(document.getElementById("btn-google"), {
+      theme: "filled_black", size: "large", text: "continue_with", locale: "es", width: 300
+    });
+    document.getElementById("bloque-google").hidden = false;
   }
 
-  // Lee la colección "expedientes" (las reglas solo la dejan leer con sesión iniciada)
-  // y dibuja una tarjeta por documento. Si está vacía, se quedan las tarjetas de ejemplo.
+  // ---------- 4. ENTRAR O REGISTRARSE CON EMAIL ----------
+  formEmail.addEventListener("submit", async evento => {
+    evento.preventDefault(); // evita que el formulario recargue la página
+    const email = formEmail.email.value.trim();
+    const password = formEmail.password.value;
+    // evento.submitter es el botón que se pulsó: "entrar" o "registro"
+    const accion = evento.submitter ? evento.submitter.value : "entrar";
+
+    if (!email || password.length < 6) {
+      mostrarMensaje("Escribe un correo válido y una contraseña de al menos 6 caracteres.");
+      return;
+    }
+    try {
+      // El servidor responde con los datos del usuario y deja la sesión iniciada.
+      const usuario = accion === "registro"
+        ? await registrarConEmail(email, password)
+        : await entrarConEmail(email, password);
+      pintarSesion(usuario);
+    } catch (error) {
+      // Los mensajes de error ya vienen en español desde el servidor.
+      mostrarMensaje(error.message);
+    }
+  });
+
+  // ---------- 5. CERRAR SESIÓN ----------
+  document.getElementById("btn-salir").addEventListener("click", async () => {
+    await salir();
+    window.google?.accounts?.id.disableAutoSelect();
+    pintarSesion(null);
+  });
+
+  // Pide los expedientes (la API solo los da con sesión iniciada)
+  // y dibuja una tarjeta por cada uno. Si no hay, se quedan las tarjetas de ejemplo.
   async function cargarExpedientes() {
     try {
       const expedientes = await leerExpedientes();
@@ -184,27 +191,8 @@
       });
       lista.append(cuestionario); // el cuestionario siempre al final
     } catch (error) {
-      console.warn("No se pudieron leer los expedientes:", error.code);
+      console.warn("No se pudieron leer los expedientes:", error.message);
     }
-  }
-
-  // Firebase devuelve errores en inglés con un código; aquí los pasamos a español.
-  function traducirError(error) {
-    const mensajes = {
-      "auth/invalid-email": "El correo no tiene un formato válido.",
-      "auth/invalid-credential": "Correo o contraseña incorrectos.",
-      "auth/wrong-password": "Correo o contraseña incorrectos.",
-      "auth/user-not-found": "No existe ninguna cuenta con ese correo. Pulsa «Registrarse con email».",
-      "auth/email-already-in-use": "Ya hay una cuenta con ese correo. Pulsa «Iniciar sesión con email».",
-      "auth/weak-password": "La contraseña debe tener al menos 6 caracteres.",
-      "auth/too-many-requests": "Demasiados intentos. Espera un momento y vuelve a probar.",
-      "auth/popup-closed-by-user": "Has cerrado la ventana de Google antes de terminar.",
-      "auth/popup-blocked": "El navegador ha bloqueado la ventana de Google. Permite las ventanas emergentes.",
-      "auth/unauthorized-domain": "Este dominio no está autorizado en Firebase (Authentication → Configuración → Dominios autorizados).",
-      "auth/operation-not-allowed": "Este método de acceso no está activado en la consola de Firebase.",
-      "auth/network-request-failed": "No hay conexión con Firebase. Revisa tu internet."
-    };
-    return mensajes[error.code] || "Ha ocurrido un error: " + error.code;
   }
 </script>
 </body></html>

@@ -10,35 +10,37 @@
 <section class="proto-hero" style="--img:url('../img/escenarios/re2_nest.webp')"><div><span class="proto-kicker">CONSULTA</span><h1>Buscar</h1>
 <p>Explora los archivos del universo Resident Evil.</p></div></section><main class="proto-shell"><div class="proto-paper"><h2>Buscar en los archivos</h2><p id="buscar-estado">Busca en todas las secciones de la wiki.</p><form role="search" id="buscar-form"><label for="buscar-texto" class="proto-tag">TÉRMINO DE BÚSQUEDA</label><input class="proto-search" id="buscar-texto" name="q" type="search" placeholder="⌕ Escribe un personaje, juego, virus o lugar…" autocomplete="off" style="width:100%;box-sizing:border-box"></form></div><h2 class="proto-title" style="margin-top:35px" id="buscar-titulo">Resultados de ejemplo</h2><div class="proto-grid" id="buscar-resultados"><article class="proto-card"><div class="proto-img" style="--img:url('../img/escenarios/re2_vestibulo.webp')" role="img" aria-label="Imagen conservada del proyecto"></div><div class="proto-copy"><span class="proto-tag">ARCHIVO 001</span><h3>Leon S. Kennedy</h3><p>Descubre los expedientes y sus conexiones con la saga.</p></div></article><article class="proto-card"><div class="proto-img" style="--img:url('../img/escenarios/re2_nest.webp')" role="img" aria-label="Imagen conservada del proyecto"></div><div class="proto-copy"><span class="proto-tag">ARCHIVO 002</span><h3>Raccoon City</h3><p>Descubre los expedientes y sus conexiones con la saga.</p></div></article><article class="proto-card"><div class="proto-img" style="--img:url('../img/escenarios/re8_aldea.webp')" role="img" aria-label="Imagen conservada del proyecto"></div><div class="proto-copy"><span class="proto-tag">ARCHIVO 003</span><h3>Virus-T</h3><p>Descubre los expedientes y sus conexiones con la saga.</p></div></article></div></main><footer class="proto-foot">UMBRELLA ARCHIVES · 2026 · SITIO NO OFICIAL</footer>
 <script type="module">
-  import { leerColeccion, COLECCIONES, tarjeta, crear } from "../comun/firebase.js";
-  // Firestore no busca dentro de los textos, así que se leen las colecciones
-  // públicas (son pequeñas) y se filtran en el navegador.
+  import { buscar, COLECCIONES, tarjeta, crear } from "../comun/api.js";
+  // La búsqueda la hace MySQL en el servidor (GET /api/buscar?q=...) con LIKE
+  // sobre el nombre, el resumen y la descripción de todas las secciones.
   const entrada = document.getElementById("buscar-texto");
   const estado = document.getElementById("buscar-estado");
   const titulo = document.getElementById("buscar-titulo");
   const resultados = document.getElementById("buscar-resultados");
-  const normalizar = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  let espera, ultima = 0;
 
-  estado.textContent = "Cargando archivos…";
-  const todo = (await Promise.all(Object.keys(COLECCIONES).map(async c => (await leerColeccion(c)).map(item => ({ item, c })))))
-    .flat()
-    .map(r => ({ ...r, texto: normalizar(Object.entries(r.item).filter(([k]) => k !== "imagen").map(([, v]) => v).flat().join(" ")) }));
-  estado.textContent = `${todo.length} archivos disponibles en ${Object.keys(COLECCIONES).length} secciones.`;
-
-  function buscar() {
-    const termino = normalizar(entrada.value.trim());
-    history.replaceState(null, "", termino ? `?q=${encodeURIComponent(entrada.value.trim())}` : location.pathname);
+  async function lanzarBusqueda() {
+    const termino = entrada.value.trim();
+    history.replaceState(null, "", termino ? `?q=${encodeURIComponent(termino)}` : location.pathname);
     if (!termino) { titulo.textContent = "Escribe para buscar"; resultados.replaceChildren(); return; }
-    const encontrados = todo.filter(r => r.texto.includes(termino));
-    titulo.textContent = `${encontrados.length} resultado${encontrados.length === 1 ? "" : "s"} para «${entrada.value.trim()}»`;
-    resultados.replaceChildren(...(encontrados.length
-      ? encontrados.map(r => tarjeta(r.item, r.c, COLECCIONES[r.c].toUpperCase()))
-      : [crear("p", "", "Ningún archivo coincide. Prueba con otro nombre.")]));
+    const numero = ++ultima; // si llegan respuestas desordenadas, solo vale la última
+    try {
+      const encontrados = await buscar(termino);
+      if (numero !== ultima) return;
+      estado.textContent = "Busca en todas las secciones de la wiki.";
+      titulo.textContent = `${encontrados.length} resultado${encontrados.length === 1 ? "" : "s"} para «${termino}»`;
+      resultados.replaceChildren(...(encontrados.length
+        ? encontrados.map(r => tarjeta(r, r.seccion, COLECCIONES[r.seccion].toUpperCase()))
+        : [crear("p", "", "Ningún archivo coincide. Prueba con otro nombre.")]));
+    } catch (error) {
+      if (numero === ultima) estado.textContent = `No se pudo buscar: ${error.message}`;
+    }
   }
 
-  document.getElementById("buscar-form").addEventListener("submit", e => { e.preventDefault(); buscar(); });
-  entrada.addEventListener("input", buscar);
+  document.getElementById("buscar-form").addEventListener("submit", e => { e.preventDefault(); lanzarBusqueda(); });
+  // Espera 250 ms después de la última tecla para no hacer una petición por letra.
+  entrada.addEventListener("input", () => { clearTimeout(espera); espera = setTimeout(lanzarBusqueda, 250); });
   entrada.value = new URLSearchParams(location.search).get("q") || "";
-  buscar();
+  lanzarBusqueda();
 </script>
 </body></html>
